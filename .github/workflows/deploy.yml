@@ -1,0 +1,43 @@
+name: Deploy website
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:  # adds a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Get the files
+        uses: actions/checkout@v4
+
+      - name: Collect the website files
+        run: |
+          mkdir _site
+          cp -r index.html style.css favicon.ico CNAME assets _site/
+          ls -R _site
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload the website
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Publish it
+        id: deployment
+        uses: actions/deploy-pages@v4
