@@ -76,6 +76,14 @@ h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.05; margin: 0 0 18px; let
 h2 { font-size: clamp(28px, 4vw, 38px); margin: 0 0 10px; letter-spacing: -.01em; }
 .section-lead { color: var(--muted); margin: 0 0 32px; max-width: 640px; }
 .cards { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.cards-5 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.cards-5 > * { grid-column: span 2; }
+.cards-5 > :nth-child(4) { grid-column: 2 / span 2; }
+.tag { display: inline-block; vertical-align: middle; margin-left: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px;
+  font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); background: var(--field);
+  border: 1px solid var(--line); }
+.wide-shot { margin: 32px 0 0; }
+.wide-shot img { width: 100%; height: auto; border-radius: var(--radius); border: 1px solid var(--line); display: block; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
 .card h3 { margin: 14px 0 6px; font-size: 19px; }
 .card p { margin: 0; color: var(--muted); font-size: 15px; }
@@ -107,6 +115,8 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 12px; }
 @media (max-width: 900px) {
   .hero { grid-template-columns: minmax(0, 1fr); padding-top: 40px; }
   .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cards-5 > *, .cards-5 > :nth-child(4) { grid-column: auto; }
+  .cards-5 > :last-child { grid-column: 1 / -1; }
   .showcase, .features { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 560px) {
