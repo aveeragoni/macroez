@@ -65,7 +65,7 @@ h1 { font-size: clamp(40px, 6vw, 64px); line-height: 1.05; margin: 0 0 18px; let
 .lead { color: var(--muted); font-size: 18px; margin: 0 0 28px; max-width: 520px; }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; }
 .fine { color: var(--muted); font-size: 13px; margin-top: 14px; }
-.hero-shot img, .showcase img {
+.showcase img {
   border-radius: var(--radius);
   border: 1px solid var(--line);
   box-shadow: 0 30px 80px -20px rgba(45, 212, 234, .25), 0 10px 30px rgba(0, 0, 0, .5);
@@ -114,3 +114,105 @@ figcaption { color: var(--muted); font-size: 14px; margin-top: 12px; }
   .nav nav a:not(.btn) { display: none; }
   .cta .btn { flex: 1 1 100%; }
 }
+
+/* ---------- showcase video (top of the page) ---------- */
+.hero { position: relative; }
+.showcase-frame {
+  position: relative; overflow: hidden;
+  border-radius: var(--radius);
+  border: 1px solid var(--line);
+  background: var(--panel);
+  box-shadow: 0 30px 80px -20px rgba(45, 212, 234, .35), 0 10px 30px rgba(0, 0, 0, .5);
+}
+.showcase-frame::before {  /* slow glowing edge */
+  content: ""; position: absolute; inset: -40%; z-index: 0;
+  background: conic-gradient(from 0deg, transparent 0 70%, rgba(45, 212, 234, .55) 80%, transparent 90%);
+  animation: spin 7s linear infinite;
+}
+.showcase-frame::after {
+  content: ""; position: absolute; inset: 1px; z-index: 0;
+  border-radius: calc(var(--radius) - 1px); background: var(--panel);
+}
+.frame-bar, .showcase-frame video, .showcase-frame iframe, .sound { position: relative; z-index: 1; }
+.frame-bar { display: flex; align-items: center; gap: 7px; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.frame-bar span { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.frame-bar span:first-child { background: #ff5d6c; }
+.frame-bar span:nth-child(2) { background: #f5b94f; }
+.frame-bar span:nth-child(3) { background: #3ddc97; }
+.frame-bar em { margin-left: 8px; font-style: normal; font-size: 12px; color: var(--muted); }
+.showcase-frame video, .showcase-frame iframe {
+  display: block; width: 100%; aspect-ratio: 16 / 10.5; border: 0;
+  background: var(--bg); object-fit: cover;
+}
+.showcase-frame iframe { aspect-ratio: 16 / 9; }
+.sound {
+  position: absolute; right: 14px; bottom: 14px;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 8px 14px; border: 0; border-radius: 999px; cursor: pointer;
+  background: rgba(13, 17, 23, .75); color: var(--text); font: inherit; font-size: 13px; font-weight: 600;
+  backdrop-filter: blur(6px); transition: background .2s;
+}
+.sound:hover { background: rgba(45, 212, 234, .9); color: var(--on-accent); }
+.sound svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.sound .wave { display: none; }
+.sound[aria-pressed="true"] .wave { display: inline; }
+.sound[aria-pressed="true"] .mute { display: none; }
+
+/* ---------- background glow ---------- */
+.glow {
+  position: fixed; z-index: -1; width: 46vmax; height: 46vmax; border-radius: 50%;
+  filter: blur(90px); opacity: .16; pointer-events: none;
+}
+.glow-a { background: #2dd4ea; top: -18vmax; right: -12vmax; animation: drift 18s ease-in-out infinite alternate; }
+.glow-b { background: #3b6cff; bottom: -22vmax; left: -16vmax; opacity: .1; animation: drift 22s ease-in-out infinite alternate-reverse; }
+
+/* ---------- scroll-in animations ---------- */
+.js .reveal:not(.in) { opacity: 0; }
+.js .reveal.in { animation: rise .8s cubic-bezier(.2, .7, .2, 1) var(--delay, 0ms) backwards; }
+.accent {
+  background: linear-gradient(90deg, #2dd4ea, #7ae6f3, #2dd4ea);
+  background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: sheen 4s linear infinite;
+}
+
+/* ---------- buttons and cards ---------- */
+.shine { position: relative; overflow: hidden; }
+.shine::after {
+  content: ""; position: absolute; top: 0; left: -60%; width: 40%; height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .55), transparent);
+  transform: skewX(-20deg); animation: sweep 3.6s ease-in-out infinite;
+}
+.card {
+  position: relative; overflow: hidden;
+  transition: transform .25s ease, border-color .25s ease, box-shadow .25s ease;
+}
+.card::before {  /* soft light that follows the mouse */
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity .25s;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 50%), rgba(45, 212, 234, .14), transparent 70%);
+}
+.card:hover { border-color: rgba(45, 212, 234, .45); box-shadow: 0 18px 40px -18px rgba(45, 212, 234, .35); }
+.card:hover::before { opacity: 1; }
+.card:hover .icon { animation: pop .5s ease; }
+.showcase figure img { transition: transform .4s ease, box-shadow .4s ease; }
+.showcase figure:hover img { transform: translateY(-6px) scale(1.01); }
+.faq details { transition: border-color .2s; }
+.faq details:hover, .faq details[open] { border-color: rgba(45, 212, 234, .4); }
+.faq details[open] p { animation: rise .35s ease; }
+.float { animation: float 4s ease-in-out infinite; }
+
+@keyframes rise { from { opacity: 0; transform: translateY(26px); } to { opacity: 1; transform: none; } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes drift { to { transform: translate(-8vmax, 6vmax) scale(1.15); } }
+@keyframes sheen { to { background-position: 200% center; } }
+@keyframes sweep { 0%, 55% { left: -60%; } 100% { left: 130%; } }
+@keyframes pop { 50% { transform: scale(1.15) rotate(-6deg); } }
+@keyframes float { 50% { transform: translateY(-8px); } }
+
+/* people who turn off motion in their system settings get a still page */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  .js .reveal:not(.in) { opacity: 1; }
+  html { scroll-behavior: auto; }
+}
+.js .reveal.in.float { animation: rise .8s cubic-bezier(.2, .7, .2, 1) var(--delay, 0ms) backwards, float 4s ease-in-out 1s infinite; }
+.sound[hidden] { display: none; }
