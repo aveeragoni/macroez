@@ -65,7 +65,7 @@ function loadReleases() {
   return releases;
 }
 const exeOf = (release) => release.assets.find((a) => a.name.toLowerCase() === "macroez.exe");
-const megabytes = (bytes) => `${Math.round(bytes / 1e6)} MB`;
+const megabytes = (bytes) => `${Math.round(bytes / 1048576)} MB`;  // same number Windows shows
 const day = (iso) => new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "long", day: "numeric" });
 
 // Download page: version, size and date next to the button
