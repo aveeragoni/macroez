@@ -16,6 +16,15 @@
   <script>document.documentElement.classList.replace("no-js", "js")</script>
 </head>
 <body>
+  <!-- opening animation: shown once per visit, click to skip -->
+  <div class="intro" id="intro" aria-hidden="true">
+    <div class="intro-mark">
+      <span class="intro-ring"></span>
+      <img src="/assets/logo.png" alt="" width="120" height="120">
+    </div>
+    <div class="intro-name"><span>M</span><span>a</span><span>c</span><span>r</span><span>o</span><span class="ez">E</span><span class="ez">Z</span></div>
+    <div class="intro-bar"><i></i></div>
+  </div>
   <header class="nav">
     <a class="brand" href="/"><img src="/assets/logo.png" alt="" width="32" height="32">MacroEZ</a>
     <nav>
@@ -31,11 +40,10 @@
     <section class="hero">
       <div class="hero-text">
         <p class="eyebrow reveal">Free for Windows 10 &amp; 11</p>
-        <h1 class="reveal" style="--delay: 80ms">Macros made <span class="accent">easy</span>.</h1>
+        <h1 class="reveal split" style="--delay: 80ms" aria-label="Macros made easy.">Macros made <span class="accent rotator" id="rotator">easy</span>.</h1>
         <p class="lead reveal" style="--delay: 160ms">Show MacroEZ a picture of a button and it finds it and clicks it. Or record a list of key
           presses, clicks and waits, mix the two, or press a key the moment something shows up on screen.</p>
         <div class="cta reveal" style="--delay: 240ms">
-          <!-- CHANGE THIS LINK: put your GitHub username in place of aveeragoni (see SETUP.md) -->
           <a class="btn shine" id="download" href="https://github.com/aveeragoni/macroez/releases/latest/download/MacroEZ.exe">
             Download MacroEZ
           </a>
@@ -63,7 +71,7 @@
     </section>
 
     <section id="modes" class="section">
-      <h2 class="reveal">Four modes, one app</h2>
+      <h2 class="reveal split">Four modes, one app</h2>
       <p class="section-lead reveal" style="--delay: 80ms">Pick a mode on the left of the app. Each one keeps its own setup, and profiles save all of them.</p>
       <div class="cards">
         <article class="card reveal" style="--delay: 0ms">
@@ -78,7 +86,7 @@
             <svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="3"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
           </div>
           <h3>Classic</h3>
-          <p>A list of key presses, clicks and waits, played top to bottom on a loop. Waits can be random, so it doesn't look robotic.</p>
+          <p>Press <kbd>F7</kbd>, play normally, press <kbd>F7</kbd> again. Every key press and click is replayed exactly: same spots, same timing, on a loop.</p>
         </article>
         <article class="card reveal" style="--delay: 180ms">
           <div class="icon" aria-hidden="true">
@@ -109,9 +117,10 @@
     </section>
 
     <section id="features" class="section">
-      <h2 class="reveal">Built to just work</h2>
+      <h2 class="reveal split">Built to just work</h2>
       <ul class="features">
-        <li class="reveal" style="--delay: 0ms"><strong>Fast detection.</strong> Checks a full screen of images in a fraction of a second. Star the important ones to check them first.</li>
+        <li class="reveal" style="--delay: 0ms"><strong>Record and replay.</strong> Holds, key combos and mouse drags are kept, and playback timing is accurate to about a millisecond.</li>
+        <li class="reveal" style="--delay: 30ms"><strong>Fast detection.</strong> Checks a full screen of images in a fraction of a second. Star the important ones to check them first.</li>
         <li class="reveal" style="--delay: 60ms"><strong>Works on changing backgrounds.</strong> Merge a few snips of the same button and MacroEZ learns its outline, so a different map behind it doesn't matter.</li>
         <li class="reveal" style="--delay: 120ms"><strong>Backup detection.</strong> If the normal check misses, a second method looks for the button's shape.</li>
         <li class="reveal" style="--delay: 180ms"><strong>Safe zones.</strong> Draw areas it must never click, like your hotbar.</li>
@@ -122,7 +131,7 @@
     </section>
 
     <section id="faq" class="section faq">
-      <h2 class="reveal">Questions</h2>
+      <h2 class="reveal split">Questions</h2>
       <details class="reveal" style="--delay: 0ms">
         <summary>Windows says "Windows protected your PC". Is it safe?</summary>
         <p>Windows shows that for apps from small developers that haven't bought a code-signing certificate yet. Click <em>More info</em>, then <em>Run anyway</em>. Only download MacroEZ from this site.</p>
@@ -147,7 +156,7 @@
 
     <section class="section final">
       <img class="reveal float" src="/assets/logo.png" alt="" width="72" height="72">
-      <h2 class="reveal" style="--delay: 80ms">Ready to stop clicking?</h2>
+      <h2 class="reveal split" style="--delay: 80ms">Ready to stop clicking?</h2>
       <a class="btn shine reveal" style="--delay: 160ms" href="https://github.com/aveeragoni/macroez/releases/latest/download/MacroEZ.exe">Download MacroEZ</a>
     </section>
   </main>
@@ -158,13 +167,75 @@
   <script>
     document.getElementById("year").textContent = new Date().getFullYear();
 
+    const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // Headings: wrap each word so the words can rise in one after another
+    document.querySelectorAll(".split").forEach((heading) => {
+      let i = 0;
+      for (const node of [...heading.childNodes]) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const frag = document.createDocumentFragment();
+          node.textContent.split(/(\s+)/).forEach((part) => {
+            if (!part) return;
+            if (/^\s+$/.test(part)) { frag.append(part); return; }
+            const word = document.createElement("span");
+            word.className = "word"; word.style.setProperty("--i", i++); word.textContent = part;
+            word.setAttribute("aria-hidden", "true");
+            frag.append(word);
+          });
+          node.replaceWith(frag);
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          node.classList.add("word"); node.style.setProperty("--i", i++);
+        }
+      }
+    });
+
     // Fade things in as they scroll into view
     const io = "IntersectionObserver" in window && new IntersectionObserver((entries) => {
       for (const entry of entries) {
         if (entry.isIntersecting) { entry.target.classList.add("in"); io.unobserve(entry.target); }
       }
     }, { threshold: 0.15, rootMargin: "0px 0px -40px 0px" });
-    document.querySelectorAll(".reveal").forEach((el) => io ? io.observe(el) : el.classList.add("in"));
+    const startReveals = () => document.querySelectorAll(".reveal").forEach((el) => {
+      // anything already on screen starts now; the rest waits until it is scrolled to
+      if (!io || el.getBoundingClientRect().top < innerHeight * 0.92) el.classList.add("in");
+      else io.observe(el);
+    });
+
+    // Opening animation: once per visit, skipped by a click, a key, or reduced-motion settings
+    const intro = document.getElementById("intro");
+    let seen = false;
+    try { seen = sessionStorage.getItem("macroez-intro") === "1"; sessionStorage.setItem("macroez-intro", "1"); } catch (e) {}
+    const endIntro = () => {
+      if (!intro.isConnected || intro.classList.contains("out")) return;
+      intro.classList.add("out");
+      document.documentElement.classList.remove("intro-on");
+      startReveals();
+      setTimeout(() => intro.remove(), 700);
+    };
+    if (seen) {
+      intro.remove(); startReveals();
+    } else {
+      document.documentElement.classList.add("intro-on");
+      intro.addEventListener("click", endIntro);
+      addEventListener("keydown", endIntro, { once: true });
+      setTimeout(endIntro, 2100);
+    }
+
+    // "Macros made easy." cycles through a few words, ending back on "easy" each round
+    const rotator = document.getElementById("rotator");
+    {
+      const words = ["easy", "fast", "exact", "simple"];
+      let n = 0;
+      setInterval(() => {
+        rotator.classList.add("swap");
+        setTimeout(() => {
+          n = (n + 1) % words.length;
+          rotator.textContent = words[n];
+          rotator.classList.remove("swap");
+        }, 350);
+      }, 2600);
+    }
 
     // Showcase video: a YouTube link wins; otherwise assets/showcase.mp4; otherwise the screenshot
     const frame = document.getElementById("showcase-frame");
