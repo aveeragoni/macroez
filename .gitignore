@@ -1,2 +1,4 @@
 SETUP.md
 _phone_preview.html
+__pycache__/
+*.pyc
