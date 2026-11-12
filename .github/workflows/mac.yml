@@ -1,0 +1,76 @@
+name: Build Mac app
+
+# Builds MacroEZ.app on GitHub's Macs, for Apple-chip and Intel Macs.
+#  - Every change to app/ builds it and keeps the zips under this run's "Artifacts".
+#  - Publishing a release also attaches MacroEZ-mac-apple-silicon.zip and MacroEZ-mac-intel.zip to it.
+on:
+  push:
+    branches: [main]
+    paths: ["app/**", ".github/workflows/mac.yml"]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            arch: apple-silicon
+          - runner: macos-15-intel
+            arch: intel
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install what MacroEZ needs
+        run: pip install -r requirements-mac.txt
+      - name: Test on a real Mac
+        run: python tests/test_mac_ci.py
+      - name: Make the app icon
+        run: |
+          mkdir MacroEZ.iconset
+          for size in 16 32 128 256 512; do
+            sips -z $size $size macroez_logo_square.png --out MacroEZ.iconset/icon_${size}x${size}.png > /dev/null
+            double=$((size * 2))
+            sips -z $double $double macroez_logo_square.png --out MacroEZ.iconset/icon_${size}x${size}@2x.png > /dev/null
+          done
+          iconutil -c icns MacroEZ.iconset -o MacroEZ.icns
+      - name: Build MacroEZ.app
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          export MACROEZ_VERSION="${TAG#v}"
+          [ -n "$MACROEZ_VERSION" ] || export MACROEZ_VERSION=1.4
+          pyinstaller --noconfirm --log-level WARN macroez-mac.spec
+      - name: Check the built app opens
+        run: |
+          rm -f "$HOME/Library/Application Support/MacroEZ/selftest.txt"
+          MACROEZ_SELFTEST=1 MACROEZ_NO_WELCOME=1 ./dist/MacroEZ.app/Contents/MacOS/MacroEZ &
+          for i in $(seq 1 60); do
+            [ -f "$HOME/Library/Application Support/MacroEZ/selftest.txt" ] && break
+            sleep 1
+          done
+          cat "$HOME/Library/Application Support/MacroEZ/selftest.txt"
+      - name: Zip it
+        run: ditto -c -k --keepParent dist/MacroEZ.app "MacroEZ-mac-${{ matrix.arch }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MacroEZ-mac-${{ matrix.arch }}
+          path: app/MacroEZ-mac-${{ matrix.arch }}.zip
+      - name: Attach to the release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$TAG" "MacroEZ-mac-${{ matrix.arch }}.zip" --clobber
