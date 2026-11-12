@@ -1,8 +1,10 @@
 name: Presets
 
 # A preset is handed in as an issue made from the "Share a macro preset" form.
-#  - When it's opened or edited, the file is checked and a comment says what it does.
-#  - When the repository owner adds the "approved" label, it's published to macroez.com/presets.
+#  - Opened or edited: the file is checked. A clean preset is published straight away. One that does something
+#    worth a second look (or a 4th upload from the same person in a day) waits for the owner.
+#  - The owner adds "approved": it's published anyway.
+#  - The owner adds "unpublish": it's taken off the site.
 on:
   issues:
     types: [opened, edited, labeled]
@@ -17,8 +19,12 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check:
-    if: (github.event.action == 'opened' || github.event.action == 'edited') && startsWith(github.event.issue.title, 'Preset:')
+  preset:
+    if: >-
+      startsWith(github.event.issue.title, 'Preset:') && (
+        github.event.action == 'opened' || github.event.action == 'edited' ||
+        (github.event.action == 'labeled' && github.event.sender.login == github.repository_owner &&
+         (github.event.label.name == 'approved' || github.event.label.name == 'unpublish')))
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,60 +32,45 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install pillow==11.0.0
-      - name: Check the preset file
-        id: check
+      - name: Check, publish or take down
         continue-on-error: true
         env:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-        run: python .github/scripts/presets.py check
-      - name: Comment and label
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.issue.number }}
+          EVENT: ${{ github.event.action }}
+          LABEL: ${{ github.event.label.name }}
         run: |
-          gh label create preset --color 2dd4ea --description "A shared macro preset" --force
-          gh label create approved --color 3ddc97 --description "Publish this preset to macroez.com" --force
-          gh issue edit "$NUMBER" --add-label preset
-          gh issue comment "$NUMBER" --body-file "$RUNNER_TEMP/comment.md"
-
-  publish:
-    if: github.event.action == 'labeled' && github.event.label.name == 'approved' && github.event.sender.login == github.repository_owner && startsWith(github.event.issue.title, 'Preset:')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-      - run: pip install pillow==11.0.0
-      - name: Add the preset to the website
-        id: publish
-        continue-on-error: true
-        env:
-          ISSUE_NUMBER: ${{ github.event.issue.number }}
-          ISSUE_BODY: ${{ github.event.issue.body }}
-          ISSUE_AUTHOR: ${{ github.event.issue.user.login }}
-        run: python .github/scripts/presets.py publish
+          if [ "$EVENT" = "labeled" ] && [ "$LABEL" = "unpublish" ]; then action=unpublish
+          elif [ "$EVENT" = "labeled" ]; then action=publish
+          else action=auto; fi
+          python .github/scripts/presets.py "$action"
       - name: Save and deploy
-        if: steps.publish.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           NUMBER: ${{ github.event.issue.number }}
         run: |
-          git config user.name "macroez-presets"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add presets
-          git commit -m "Add preset $(cat "$RUNNER_TEMP/preset_id.txt") from issue #$NUMBER"
-          git push
-          gh workflow run deploy.yml --ref main
-          gh issue comment "$NUMBER" --body-file "$RUNNER_TEMP/comment.md"
-          gh issue close "$NUMBER" --reason completed
-      - name: Explain what went wrong
-        if: steps.publish.outcome != 'success'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          NUMBER: ${{ github.event.issue.number }}
-        run: |
-          gh issue edit "$NUMBER" --remove-label approved
+          decision=$(cat "$RUNNER_TEMP/decision.txt" 2>/dev/null || echo refused)
+          gh label create preset --color 2dd4ea --description "A shared macro preset" --force
+          gh label create published --color 3ddc97 --description "Listed on macroez.com/presets" --force
+          gh label create approved --color 3ddc97 --description "Owner: publish this preset" --force
+          gh label create unpublish --color ff5d6c --description "Owner: take this preset down" --force
+          gh issue edit "$NUMBER" --add-label preset
+          if [ "$decision" = "publish" ] || [ "$decision" = "removed" ]; then
+            git config user.name "macroez-presets"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add -A presets
+            git commit -m "Presets: $decision from issue #$NUMBER" || true
+            git pull --rebase --quiet
+            git push
+            gh workflow run deploy.yml --ref main
+          fi
+          if [ "$decision" = "publish" ]; then
+            gh issue edit "$NUMBER" --add-label published --remove-label unpublish || gh issue edit "$NUMBER" --add-label published || true
+            gh issue close "$NUMBER" --reason completed || true
+          elif [ "$decision" = "removed" ]; then
+            gh issue edit "$NUMBER" --remove-label published --remove-label approved || true
+          else
+            gh issue edit "$NUMBER" --remove-label approved || true
+          fi
           if [ -f "$RUNNER_TEMP/comment.md" ]; then gh issue comment "$NUMBER" --body-file "$RUNNER_TEMP/comment.md"; fi

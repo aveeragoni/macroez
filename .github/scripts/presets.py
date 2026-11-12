@@ -1,7 +1,8 @@
 """Checks preset submissions (GitHub issues) and publishes approved ones to presets/ on the website.
 
-  python presets.py check    -> writes comment.md with what the preset does and anything worth a second look
-  python presets.py publish  -> adds the preset to presets/<id>/preset.zip and presets/index.json
+  python presets.py auto       -> publishes a clean preset straight away, or explains why it waits for the owner
+  python presets.py publish    -> the owner approved it: adds it to presets/<id>/preset.zip and presets/index.json
+  python presets.py unpublish  -> the owner took it down: removes it from the site
 
 Reads the issue from the environment: ISSUE_NUMBER, ISSUE_TITLE, ISSUE_BODY, ISSUE_AUTHOR.
 The same rules as the app's read_preset(), so a preset that passes here opens in the app.
@@ -152,14 +153,54 @@ def field(body, label):
     return "" if value == "_No response_" else value
 
 
+DAILY_LIMIT = 3  # instant publishes per person per day; more than that waits for the owner
+
+
+def load_index():
+    path = PRESETS / "index.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"presets": []}
+
+
+def save_index(index):
+    index["presets"].sort(key=lambda p: p.get("added", ""), reverse=True)
+    (PRESETS / "index.json").write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+
+
+def remove(number):
+    """Take every preset from this issue off the site. True if anything was removed."""
+    index = load_index()
+    gone = [p for p in index["presets"] if p.get("issue") == number]
+    for preset in gone:
+        folder = PRESETS / preset["id"]
+        if folder.is_dir() and re.fullmatch(r"[a-z0-9][a-z0-9-]{1,79}", preset["id"]):
+            for file in folder.iterdir():
+                file.unlink()
+            folder.rmdir()
+    index["presets"] = [p for p in index["presets"] if p.get("issue") != number]
+    save_index(index)
+    return bool(gone)
+
+
 def main(action):
+    """action: "auto" (opened or edited), "publish" (the owner approved it) or "unpublish" (the owner took it down).
+    Writes comment.md, and decision.txt: "publish", "wait", "refused", "removed" or "nothing"."""
     number = int(os.environ["ISSUE_NUMBER"])
     body = os.environ.get("ISSUE_BODY", "")
     author = clean(os.environ.get("ISSUE_AUTHOR", ""), 40)
-    out = Path(os.environ.get("RUNNER_TEMP", ".")) / "comment.md"
+    temp = Path(os.environ.get("RUNNER_TEMP", "."))
+    out, decision = temp / "comment.md", temp / "decision.txt"
+    if action == "unpublish":
+        removed = remove(number)
+        decision.write_text("removed" if removed else "nothing", encoding="utf-8")
+        out.write_text("🗑️ **Taken down.** This preset is no longer listed." if removed else
+                       "This preset wasn't listed, so there was nothing to take down.", encoding="utf-8")
+        return 0
     try:
-        data, images = read(download(body))
+        blob = download(body)
+        data, images = read(blob)
     except Refused as problem:
+        removed = remove(number)  # an edit that breaks a listed preset takes it down
+        decision.write_text("removed" if removed else "refused", encoding="utf-8")
         out.write_text(f"❌ **This preset can't be listed yet.** {problem}\n\nFix it, then edit this issue "
                        "and it'll be checked again.", encoding="utf-8")
         print("refused:", problem)
@@ -167,32 +208,41 @@ def main(action):
     name = clean(field(body, "Preset name") or data.get("name") or "Preset", 60)
     description = clean(field(body, "What does it do?") or data.get("description"), 300)
     found = warnings(data)
-    steps = describe_steps(data)
-    if action == "check":
-        flags = "\n".join(f"- ⚠️ {w}" for w in found) or "- Nothing unusual."
-        lines = "\n".join(steps) or "(no steps)"
-        out.write_text(
-            f"✅ **The file checks out.** {MODES[data['mode']]} mode, {count(data)} item(s), {images} image(s).\n\n"
-            f"**Worth a second look:**\n{flags}\n\n<details><summary>Every step</summary>\n\n```\n{lines}\n```\n"
-            "</details>\n\nA maintainer will look it over. Adding the **approved** label publishes it.",
-            encoding="utf-8")
+    steps = "\n".join(describe_steps(data)) or "(no steps)"
+    flags = "\n".join(f"- ⚠️ {w}" for w in found) or "- Nothing unusual."
+    summary = (f"{MODES[data['mode']]} mode, {count(data)} item(s), {images} image(s).\n\n"
+               f"**Worth a second look:**\n{flags}\n\n<details><summary>Every step</summary>\n\n```\n{steps}\n```\n"
+               "</details>")
+    today = datetime.date.today().isoformat()
+    index = load_index()
+    already = any(p.get("issue") == number for p in index["presets"])
+    published_today = sum(1 for p in index["presets"] if p.get("author") == author and p.get("added") == today
+                          and p.get("issue") != number)
+    if action == "auto" and (found or published_today >= DAILY_LIMIT):
+        removed = remove(number) if already else False  # an edit that adds something risky waits again
+        why = ("it does something worth a second look (listed below)" if found else
+               f"you've already published {DAILY_LIMIT} presets today")
+        decision.write_text("removed" if removed else "wait", encoding="utf-8")
+        out.write_text(f"⏳ **Waiting for a quick check**, because {why}. The site owner can publish it by adding "
+                       f"the **approved** label.\n\n{summary}", encoding="utf-8")
         return 0
     preset_id = slug(name, number)
+    remove(number)  # an edit can rename it: drop the old copy first
+    index = load_index()
     folder = PRESETS / preset_id
     folder.mkdir(parents=True, exist_ok=True)
-    blob = download(body)
     (folder / "preset.zip").write_bytes(blob)
-    index_path = PRESETS / "index.json"
-    index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {"presets": []}
     entry = {"id": preset_id, "name": name, "description": description, "mode": data["mode"],
              "author": author, "items": count(data), "images": images, "warnings": found,
-             "size": len(blob), "added": datetime.date.today().isoformat(), "issue": number}
-    index["presets"] = [p for p in index["presets"] if p.get("id") != preset_id] + [entry]
-    index["presets"].sort(key=lambda p: p.get("added", ""), reverse=True)
-    index_path.write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
-    (Path(os.environ.get("RUNNER_TEMP", ".")) / "preset_id.txt").write_text(preset_id, encoding="utf-8")
-    out.write_text(f"🎉 **Published!** It's live at https://macroez.com/presets/#{preset_id} in a minute or two, "
-                   "and in the app under **Presets**. Thanks for sharing!", encoding="utf-8")
+             "size": len(blob), "added": today, "issue": number}
+    index["presets"].append(entry)
+    save_index(index)
+    (temp / "preset_id.txt").write_text(preset_id, encoding="utf-8")
+    decision.write_text("publish", encoding="utf-8")
+    verb = "Updated" if already else "Published"
+    out.write_text(f"🎉 **{verb}!** It's live at https://macroez.com/presets/#{preset_id} in a minute or two, "
+                   f"and in the app under **Presets**. Thanks for sharing!\n\n{summary}\n\n"
+                   "To change it, edit this issue and drop in a new file.", encoding="utf-8")
     return 0
 
 

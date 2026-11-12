@@ -38,6 +38,19 @@
       "size": 575,
       "added": "2026-11-11",
       "issue": null
+    },
+    {
+      "id": "glass-wrap-farm-1",
+      "name": "Glass Wrap Farm",
+      "description": "Automatically farm Glass Wrap on grenade launcher!",
+      "mode": "image",
+      "author": "aveeragoni",
+      "items": 16,
+      "images": 23,
+      "warnings": [],
+      "size": 566141,
+      "added": "2026-11-11",
+      "issue": 1
     }
   ]
 }

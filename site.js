@@ -171,7 +171,16 @@ if (presetList) {
       const file = el("a", "btn btn-small btn-ghost", "Download");
       file.href = `/presets/${p.id}/preset.zip`;
       file.setAttribute("download", `${(p.name || p.id).replace(/[^\w -]+/g, "")}.macroez.zip`);
-      actions.append(open, file);
+      const report = el("a", "preset-report", "Report");
+      report.href = "https://github.com/aveeragoni/macroez/issues/new?" + new URLSearchParams({
+        title: `Report: ${p.name || p.id}`,
+        body: `Preset: https://macroez.com/presets/#${p.id}
+
+What's wrong with it?
+`,
+      });
+      report.target = "_blank"; report.rel = "noopener";
+      actions.append(open, file, report);
       card.append(actions);
       presetList.append(card);
     });
