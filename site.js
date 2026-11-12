@@ -80,6 +80,22 @@ if (dlMeta) {
       el.textContent = latest.tag_name.replace(/^v/i, "");
     });
   }).catch(() => {});
+  // The Mac version, once a release has it
+  const macBox = document.getElementById("mac-downloads");
+  loadReleases().then((list) => {
+    const withMac = list.find((r) => !r.prerelease && r.assets.some((a) => /^macroez-mac-.*\.zip$/i.test(a.name)));
+    if (!withMac || !macBox) return;
+    const asset = (arch) => withMac.assets.find((a) => a.name.toLowerCase() === `macroez-mac-${arch}.zip`);
+    [["mac-arm", "apple-silicon"], ["mac-intel", "intel"]].forEach(([id, arch]) => {
+      const link = document.getElementById(id), file = asset(arch);
+      if (file) link.href = file.browser_download_url; else link.remove();
+    });
+    macBox.hidden = false;
+    if (/Macintosh/.test(navigator.userAgent)) {  // on a Mac, the Mac download comes first
+      macBox.parentNode.insertBefore(macBox, macBox.parentNode.firstElementChild);
+    }
+    startReveals(macBox);
+  }).catch(() => {});
 }
 
 // Versions page: every release with its notes and its own download
