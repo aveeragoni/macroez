@@ -52,33 +52,61 @@
           <a class="btn shine" id="mac-arm" href="#">Download for Apple chip (M1 and newer)</a>
           <a class="btn btn-ghost" id="mac-intel" href="#">Download for Intel</a>
         </div>
-        <p class="fine">Unzip it and drag MacroEZ into Applications. The first time, macOS may say it can't check the app:
-          open <strong>System Settings → Privacy &amp; Security</strong>, scroll down and click <strong>Open Anyway</strong>.
-          Then let MacroEZ use <strong>Accessibility</strong>, <strong>Input Monitoring</strong> and
-          <strong>Screen Recording</strong> when it asks, so it can click, watch your hotkeys and see the screen.</p>
+        <p class="fine">Unzip it, drag MacroEZ into Applications, then follow <a href="#getting-started">Getting started</a> below.</p>
       </div>
     </section>
 
-    <section class="section tight">
+    <section class="section tight" id="getting-started">
       <h2 class="reveal split">Getting started</h2>
-      <ol class="steps">
-        <li class="card reveal" style="--delay: 0ms">
-          <span class="step-num">1</span>
-          <h3>Give it a folder</h3>
-          <p>Move MacroEZ.exe into its own folder, like <code>Documents\MacroEZ</code>. Your macros are saved next to it.</p>
-        </li>
-        <li class="card reveal" style="--delay: 90ms">
-          <span class="step-num">2</span>
-          <h3>Open it</h3>
-          <p>If Windows says "Windows protected your PC", click <em>More info</em>, then <em>Run anyway</em>. <a href="/faq/">Why?</a></p>
-        </li>
-        <li class="card reveal" style="--delay: 180ms">
-          <span class="step-num">3</span>
-          <h3>Pick a mode</h3>
-          <p>Choose a mode on the left, set it up, then press <kbd>F6</kbd> to start and stop. <a href="/modes/">See the modes</a></p>
-        </li>
-      </ol>
-      <p class="muted center reveal">Updating? Replace the old MacroEZ.exe with the new one in the same folder. Your macros stay.</p>
+      <div class="chips os-pick reveal" role="tablist" aria-label="Your computer">
+        <button class="chip on" type="button" role="tab" aria-selected="true" data-os="windows">Windows</button>
+        <button class="chip" type="button" role="tab" aria-selected="false" data-os="mac">Mac</button>
+      </div>
+      <div data-os-panel="windows">
+        <ol class="steps">
+          <li class="card reveal" style="--delay: 0ms">
+            <span class="step-num">1</span>
+            <h3>Give it a folder</h3>
+            <p>Move MacroEZ.exe into its own folder, like <code>Documents\MacroEZ</code>. Your macros are saved next to it.</p>
+          </li>
+          <li class="card reveal" style="--delay: 90ms">
+            <span class="step-num">2</span>
+            <h3>Open it</h3>
+            <p>If Windows says "Windows protected your PC", click <em>More info</em>, then <em>Run anyway</em>. <a href="/faq/">Why?</a></p>
+          </li>
+          <li class="card reveal" style="--delay: 180ms">
+            <span class="step-num">3</span>
+            <h3>Pick a mode</h3>
+            <p>Choose a mode on the left, set it up, then press <kbd>F6</kbd> to start and stop. <a href="/modes/">See the modes</a></p>
+          </li>
+        </ol>
+        <p class="muted center reveal">Updating? Replace the old MacroEZ.exe with the new one in the same folder. Your macros stay.</p>
+      </div>
+      <div data-os-panel="mac" hidden>
+        <ol class="steps steps-4">
+          <li class="card reveal" style="--delay: 0ms">
+            <span class="step-num">1</span>
+            <h3>Put it in Applications</h3>
+            <p>Open the zip you downloaded, then drag <strong>MacroEZ</strong> into your <strong>Applications</strong> folder.</p>
+          </li>
+          <li class="card reveal" style="--delay: 90ms">
+            <span class="step-num">2</span>
+            <h3>Open it</h3>
+            <p>If macOS says it can't check the app, open <strong>System Settings → Privacy &amp; Security</strong>, scroll down and click <em>Open Anyway</em>.</p>
+          </li>
+          <li class="card reveal" style="--delay: 180ms">
+            <span class="step-num">3</span>
+            <h3>Allow it</h3>
+            <p>Turn MacroEZ on in <strong>Accessibility</strong>, <strong>Input Monitoring</strong> and <strong>Screen Recording</strong> when it asks, then quit and reopen it. It needs these to click, hear your hotkeys and see the screen.</p>
+          </li>
+          <li class="card reveal" style="--delay: 270ms">
+            <span class="step-num">4</span>
+            <h3>Pick a mode</h3>
+            <p>Choose a mode on the left, set it up, then press <kbd>F6</kbd> to start and stop. Some Macs need <kbd>fn</kbd> + <kbd>F6</kbd>. <a href="/modes/">See the modes</a></p>
+          </li>
+        </ol>
+        <p class="muted center reveal">Updating? Replace MacroEZ in Applications with the new one. Your macros stay. If clicks or hotkeys stop working, turn MacroEZ off and on again in those three settings.</p>
+      </div>
     </section>
   </main>
 

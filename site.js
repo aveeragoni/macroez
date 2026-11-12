@@ -219,3 +219,19 @@ What's wrong with it?
     render();
   }));
 }
+
+// Download page: Getting started for Windows or Mac (Mac first on a Mac)
+const osChips = document.querySelectorAll(".os-pick .chip");
+if (osChips.length) {
+  const showOs = (os) => {
+    osChips.forEach((c) => { const on = c.dataset.os === os; c.classList.toggle("on", on); c.setAttribute("aria-selected", on); });
+    document.querySelectorAll("[data-os-panel]").forEach((panel) => {
+      panel.hidden = panel.dataset.osPanel !== os;
+      if (!panel.hidden) startReveals(panel);
+    });
+  };
+  osChips.forEach((c) => c.addEventListener("click", () => showOs(c.dataset.os)));
+  if (/Macintosh/.test(navigator.userAgent)) showOs("mac");
+  document.querySelectorAll('#mac-downloads a[href="#getting-started"]').forEach((a) =>
+    a.addEventListener("click", () => showOs("mac")));
+}
