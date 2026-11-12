@@ -24,6 +24,7 @@ print("apps", list(gc.open_apps())[:8])
 print("key F6 down?", gc.key_is_down(gc.HOTKEY_KEYS["F6"]))
 print("our window at 0,0?", gc.point_is_ours(0, 0))
 print("permissions still needed", mac.missing_permissions())
+print("screen capture blocked?", gc.screen_capture_blocked())
 with gc.mss.MSS() as sct:
     monitor = gc.pick_monitor(sct, 1)
     frame = gc.grab_bgr(sct, monitor)

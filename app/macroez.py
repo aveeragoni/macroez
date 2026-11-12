@@ -380,6 +380,15 @@ def foreground_is_ours():
     return _window_pid(user32.GetForegroundWindow()) == OWN_PID
 
 
+def screen_capture_blocked():
+    """Whether the system only lets MacroEZ see the wallpaper instead of other apps (a Mac without Screen Recording)."""
+    return False
+
+
+def screen_permission_help(app):
+    """Explain how to let MacroEZ see the screen (only needed on a Mac)."""
+
+
 def point_is_ours(x, y):
     """Whether one of MacroEZ's own windows is under this point on the screen."""
     return _window_pid(user32.WindowFromPoint(wintypes.POINT(x, y))) == OWN_PID
@@ -5242,6 +5251,11 @@ class App:
     def _open_overlay(self, hint_text, done, point=False):
         if self.snipping:
             return
+        if screen_capture_blocked():
+            self.log("macOS is only letting MacroEZ see your wallpaper, not your apps. Turn on Screen Recording "
+                     "for MacroEZ, then quit and reopen it.")
+            screen_permission_help(self)
+            return
         self.snipping = True
         self.engine.stop()
         self.root.withdraw()
@@ -5369,6 +5383,12 @@ class App:
         if problem:
             self.log(problem)
             return
+        if mode in ("image", "hybrid", "reaction") and screen_capture_blocked():
+            self.log("macOS is only letting MacroEZ see your wallpaper, so it can't find your pictures. Turn on "
+                     "Screen Recording for MacroEZ, then quit and reopen it.")
+            screen_permission_help(self)
+            if mode != "hybrid":  # Hybrid can still press keys and click spots; its picture steps just won't match
+                return
         self.engine.clicks = 0
         self.engine.start()
         if quiet:

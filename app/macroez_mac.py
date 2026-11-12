@@ -386,6 +386,56 @@ def missing_permissions():
     return missing
 
 
+def screen_capture_blocked():
+    """True when macOS hides other apps from screenshots, so a snip would only show the wallpaper.
+    macOS only rechecks this when MacroEZ starts, so after allowing it MacroEZ has to be reopened."""
+    try:
+        if hasattr(Quartz, "CGPreflightScreenCaptureAccess"):
+            return not Quartz.CGPreflightScreenCaptureAccess()
+    except Exception:
+        pass
+    return False
+
+
+_screen_asked = [False]
+
+
+def screen_permission_help(app):
+    """A small window that sends the user to Screen Recording, with a button to quit after allowing it."""
+    if not _screen_asked[0] and hasattr(Quartz, "CGRequestScreenCaptureAccess"):
+        _screen_asked[0] = True
+        try:
+            Quartz.CGRequestScreenCaptureAccess()  # puts MacroEZ in the Screen Recording list
+        except Exception:
+            pass
+    old = getattr(app, "screen_help_window", None)
+    if old is not None and old.winfo_exists():
+        old.deiconify()
+        old.lift()
+        return
+    tk, ttk = g["tk"], g["ttk"]
+    top = tk.Toplevel(app.root)
+    top.title(g["APP_NAME"])
+    top.configure(bg=g["BG"])
+    body = ttk.Frame(top, style="Card.TFrame", padding=22)
+    body.pack(fill="both", expand=True, padx=14, pady=14)
+    ttk.Label(body, text="Let MacroEZ see your screen", style="Section.TLabel").grid(row=0, column=0, sticky="w")
+    ttk.Label(body, text="Right now macOS only shows MacroEZ your wallpaper, not your apps, so snips and "
+                         "picture searches can't work.\n\n"
+                         "1. Click Open Screen Recording settings.\n"
+                         "2. Turn MacroEZ on. If it's already on, turn it off and on again.\n"
+                         "3. Quit MacroEZ and open it again. macOS only applies this after a restart.",
+              style="Muted.TLabel", wraplength=440, justify="left").grid(row=1, column=0, sticky="w", pady=(8, 14))
+    ttk.Button(body, text="Open Screen Recording settings",
+               command=lambda: g["webbrowser"].open(SETTINGS_PAGES["Screen Recording"])
+               ).grid(row=2, column=0, sticky="ew", pady=3)
+    ttk.Button(body, text="Quit MacroEZ", command=app.close).grid(row=3, column=0, sticky="ew", pady=3)
+    ttk.Button(body, text="Not now", style="Accent.TButton", command=top.destroy).grid(
+        row=4, column=0, sticky="e", pady=(14, 0))
+    top.transient(app.root)
+    app.screen_help_window = top
+
+
 def ask_permissions():
     """Let macOS show its own prompts, which also adds MacroEZ to each list in System Settings."""
     AXIsProcessTrustedWithOptions({kAXTrustedCheckOptionPrompt: True})
@@ -451,7 +501,8 @@ def install(namespace):
     _build_tables()
     for name in ("send_scan", "key_is_down", "key_name", "cursor_position", "set_cursor", "nudge_mouse", "move_to",
                  "mouse_button", "scroll_wheel", "foreground_exe", "foreground_is_ours", "point_is_ours",
-                 "open_apps", "Recorder", "fine_timer", "register_link_handler"):
+                 "open_apps", "Recorder", "fine_timer", "register_link_handler", "screen_capture_blocked",
+                 "screen_permission_help"):
         namespace[name] = globals()[name]
     namespace["OWN_PID"] = OWN_PID
     info = namespace["MODE_INFO"]
