@@ -128,3 +128,69 @@ if (versionList) {
       <a href="https://github.com/${REPO}/releases">See every version on GitHub</a>.</p>`;
   });
 }
+
+// ---- Macro presets, from presets/index.json (made when a shared preset is approved)
+const presetList = document.getElementById("preset-list");
+if (presetList) {
+  const MODE_NAMES = { image: "Image", classic: "Classic", hybrid: "Hybrid", reaction: "Reaction", autoclick: "Autoclicker" };
+  const search = document.getElementById("preset-search");
+  const chips = document.querySelectorAll("#preset-modes .chip");
+  let presets = [], mode = "";
+  const el = (tag, cls, text) => {
+    const node = document.createElement(tag);
+    if (cls) node.className = cls;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  const safeId = (id) => /^[a-z0-9][a-z0-9-]{1,79}$/.test(id || "");
+  function render() {
+    const words = (search.value || "").toLowerCase().split(/\s+/).filter(Boolean);
+    const shown = presets.filter((p) => (!mode || p.mode === mode) &&
+      words.every((w) => `${p.name} ${p.description} ${p.author}`.toLowerCase().includes(w)));
+    presetList.replaceChildren();
+    if (!shown.length) {
+      presetList.append(el("p", "muted", presets.length ? "No presets match that." : "No presets yet. Be the first to share one!"));
+      return;
+    }
+    shown.forEach((p, n) => {
+      const card = el("article", "card preset reveal");
+      card.id = p.id;
+      card.style.setProperty("--delay", `${Math.min(n, 6) * 50}ms`);
+      const top = el("div", "preset-top");
+      top.append(el("span", "tag", MODE_NAMES[p.mode] || "Macro"));
+      if (p.author) top.append(el("span", "muted", `by ${p.author}`));
+      card.append(top, el("h3", "", p.name || p.id), el("p", "", p.description || "No description."));
+      const facts = [];
+      if (p.items) facts.push(`${p.items} ${p.mode === "classic" || p.mode === "hybrid" ? "steps" : "items"}`);
+      if (p.images) facts.push(`${p.images} image${p.images === 1 ? "" : "s"}`);
+      if (facts.length) card.append(el("p", "preset-facts muted", facts.join(" · ")));
+      (Array.isArray(p.warnings) ? p.warnings : []).slice(0, 4).forEach((w) => card.append(el("p", "preset-warn", `⚠ ${w}`)));
+      const actions = el("div", "preset-actions");
+      const open = el("a", "btn btn-small", "Open in MacroEZ");
+      open.href = `macroez://preset/${p.id}`;
+      const file = el("a", "btn btn-small btn-ghost", "Download");
+      file.href = `/presets/${p.id}/preset.zip`;
+      file.setAttribute("download", `${(p.name || p.id).replace(/[^\w -]+/g, "")}.macroez.zip`);
+      actions.append(open, file);
+      card.append(actions);
+      presetList.append(card);
+    });
+    startReveals(presetList);
+    if (location.hash && safeId(location.hash.slice(1))) {
+      const target = document.getElementById(location.hash.slice(1));
+      if (target) { target.classList.add("highlight"); target.scrollIntoView({ block: "center" }); }
+    }
+  }
+  fetch("/presets/index.json", { cache: "no-cache" }).then((r) => r.json()).then((data) => {
+    presets = (data.presets || []).filter((p) => p && safeId(p.id) && MODE_NAMES[p.mode]);
+    render();
+  }).catch(() => {
+    presetList.replaceChildren(el("p", "muted", "Couldn't load presets right now. Try again in a minute."));
+  });
+  search.addEventListener("input", render);
+  chips.forEach((chip) => chip.addEventListener("click", () => {
+    mode = chip.dataset.mode;
+    chips.forEach((c) => c.classList.toggle("on", c === chip));
+    render();
+  }));
+}

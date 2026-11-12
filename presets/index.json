@@ -1,0 +1,43 @@
+{
+  "presets": [
+    {
+      "id": "steady-clicker",
+      "name": "Steady clicker",
+      "description": "Clicks 10 times a second with a little natural variation. Press your start key to begin and again to stop.",
+      "mode": "autoclick",
+      "author": "MacroEZ",
+      "items": 0,
+      "images": 0,
+      "warnings": [],
+      "size": 575,
+      "added": "2026-11-11",
+      "issue": null
+    },
+    {
+      "id": "hold-to-click",
+      "name": "Hold to click",
+      "description": "Clicks 20 times a second, but only while you hold your start key down. Let go and it stops.",
+      "mode": "autoclick",
+      "author": "MacroEZ",
+      "items": 0,
+      "images": 0,
+      "warnings": [],
+      "size": 562,
+      "added": "2026-11-11",
+      "issue": null
+    },
+    {
+      "id": "double-tap-rhythm",
+      "name": "Double tap rhythm",
+      "description": "Double-clicks, pauses, and repeats: a tapped rhythm of two quick clicks and a short break.",
+      "mode": "autoclick",
+      "author": "MacroEZ",
+      "items": 0,
+      "images": 0,
+      "warnings": [],
+      "size": 575,
+      "added": "2026-11-11",
+      "issue": null
+    }
+  ]
+}

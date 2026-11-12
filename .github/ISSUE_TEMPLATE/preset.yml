@@ -1,0 +1,46 @@
+name: Share a macro preset
+description: Hand in a MacroEZ preset. Once it's checked, it shows up on macroez.com/presets and in the app.
+title: "Preset: "
+labels: ["preset"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for sharing! Make the file in MacroEZ: open **Presets** → **Share this profile**. It fills most of this in for you.
+  - type: input
+    id: name
+    attributes:
+      label: Preset name
+      placeholder: Report export
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What does it do?
+      description: One or two sentences.
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Mode
+      options: [Image, Classic, Hybrid, Reaction, Autoclicker]
+    validations:
+      required: true
+  - type: textarea
+    id: file
+    attributes:
+      label: Preset file
+      description: Drag your .macroez.zip file into this box and wait for it to finish uploading.
+    validations:
+      required: true
+  - type: checkboxes
+    id: rules
+    attributes:
+      label: Before you send it
+      options:
+        - label: My preset's images don't show anything private, like my name, email or messages.
+          required: true
+        - label: It doesn't do anything harmful, like deleting files, changing settings or typing commands.
+          required: true

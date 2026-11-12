@@ -27,7 +27,7 @@ jobs:
       - name: Collect the website files
         run: |
           mkdir _site
-          cp -r index.html 404.html style.css site.js favicon.ico CNAME assets modes features faq versions download _site/
+          cp -r index.html 404.html style.css site.js favicon.ico CNAME assets modes features faq versions download presets _site/
           ls -R _site
 
       - name: Set up Pages
