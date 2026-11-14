@@ -2490,6 +2490,92 @@ class KeyBox(ttk.Combobox):
         return "break"
 
 
+class ScrollArea(tk.Frame):
+    """A column that scrolls with the mouse wheel (and a thin scrollbar) when its contents don't fit.
+    Put things in .inner, which is as wide as the area."""
+
+    def __init__(self, parent, bg):
+        super().__init__(parent, bg=bg)
+        self.columnconfigure(0, weight=1)
+        self.rowconfigure(0, weight=1)
+        self.canvas = tk.Canvas(self, bg=bg, highlightthickness=0, bd=0, height=1)
+        self.canvas.grid(row=0, column=0, sticky="nsew")
+        self.bar = ttk.Scrollbar(self, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.bar.set)
+        self.inner = tk.Frame(self.canvas, bg=bg)
+        self.inner.scroll_area = self
+        self.window = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
+        self.inner.bind("<Configure>", self._fit, add="+")
+        self.canvas.bind("<Configure>", self._fit, add="+")
+        self.showing_bar = False
+
+    def _fit(self, _event=None):
+        need_w, need_h = self.inner.winfo_reqwidth(), self.inner.winfo_reqheight()
+        if int(self.canvas.cget("width")) != need_w:
+            self.canvas.configure(width=need_w)  # the column is as wide as what's in it, like before
+        have_h = self.canvas.winfo_height()
+        self.canvas.itemconfigure(self.window, width=max(self.canvas.winfo_width(), 1))
+        self.canvas.configure(scrollregion=(0, 0, 0, need_h))
+        overflow = have_h > 1 and need_h > have_h + 1
+        if overflow != self.showing_bar:
+            self.showing_bar = overflow
+            if overflow:
+                self.bar.grid(row=0, column=1, sticky="ns", padx=(4, 0))
+            else:
+                self.bar.grid_remove()
+        if not overflow:
+            self.canvas.yview_moveto(0)
+
+    def can_scroll(self):
+        return self.inner.winfo_reqheight() > self.canvas.winfo_height() + 1
+
+    def scroll(self, notches):
+        if self.can_scroll():
+            self.canvas.yview_scroll(notches, "units")
+
+    def show(self, widget):
+        """Scroll so a widget inside is in view."""
+        if not self.can_scroll():
+            return
+        top = widget.winfo_rooty() - self.inner.winfo_rooty()
+        bottom = top + widget.winfo_height()
+        total, view = self.inner.winfo_reqheight(), self.canvas.winfo_height()
+        first = self.canvas.yview()[0] * total
+        if top < first:
+            self.canvas.yview_moveto(top / total)
+        elif bottom > first + view:
+            self.canvas.yview_moveto(max(0, bottom - view) / total)
+
+
+# widgets that use the wheel themselves; scrolling over them scrolls them, not the column
+OWN_WHEEL = ("Treeview", "Text", "Listbox", "TSpinbox", "Spinbox", "TCombobox", "Scale", "TScale")
+
+
+def wheel_scroll(event):
+    """The mouse wheel anywhere over a ScrollArea scrolls it (unless the widget under it scrolls itself)."""
+    widget = event.widget
+    if not isinstance(widget, tk.Misc):
+        return None
+    if widget.winfo_class() in OWN_WHEEL:
+        return None
+    try:
+        root = widget.winfo_toplevel()
+        under = root.winfo_containing(event.x_root, event.y_root)
+    except (tk.TclError, KeyError):
+        return None
+    while under is not None:
+        area = getattr(under, "scroll_area", None) or (under if isinstance(under, ScrollArea) else None)
+        if area is not None:
+            if IS_MAC:
+                notches = -event.delta
+            else:
+                notches = -round(event.delta / 120) or (-1 if event.delta > 0 else 1)
+            area.scroll(notches)
+            return "break"
+        under = under.master
+    return None
+
+
 class NavItem:
     """One entry in the left sidebar."""
 
@@ -3276,6 +3362,7 @@ class App:
         self._build()
         threading.Thread(target=self._hotkey_loop, daemon=True).start()
         self.root.protocol("WM_DELETE_WINDOW", self.close)
+        self.root.bind_all("<MouseWheel>", wheel_scroll, add="+")
         self.root.after(120, self._pump)
         self.log(f"Ready. Pick a mode on the left, set it up, then press {self.hotkey_name('start')} to start.")
         self.simple_window = None
@@ -3409,14 +3496,11 @@ class App:
         # buttons
         buttons = {
             "TButton": [("", (FIELD, PANEL)), ("pressed", (LINE, PANEL)), ("active", (RAISED, PANEL))],
-            "Accent.TButton": [("", (None, PANEL, None, False, (GLASS, GLASS_2))),
-                               ("pressed", (GLASS, PANEL)), ("active", (None, PANEL, None, False, (GLASS_HOVER, GLASS)))],
+            "Accent.TButton": [("", (GLASS, PANEL)), ("pressed", (GLASS_2, PANEL)), ("active", (GLASS_HOVER, PANEL))],
             "Danger.TButton": [("", (FIELD, PANEL)), ("pressed", ("#4a2129", PANEL)), ("active", ("#3a1f25", PANEL))],
             "Ghost.TButton": [("", (FIELD, BG)), ("pressed", (LINE, BG)), ("active", (RAISED, BG))],
-            "Start.TButton": [("", (None, BG, None, False, (GLASS, GLASS_2))),
-                              ("pressed", (GLASS, BG)), ("active", (None, BG, None, False, (GLASS_HOVER, GLASS)))],
-            "Stop.TButton": [("", (None, BG, None, False, (DANGER, "#e0465a"))),
-                             ("pressed", (DANGER, BG)), ("active", (None, BG, None, False, (DANGER_HOVER, DANGER)))],
+            "Start.TButton": [("", (GLASS, BG)), ("pressed", (GLASS_2, BG)), ("active", (GLASS_HOVER, BG))],
+            "Stop.TButton": [("", (DANGER, BG)), ("pressed", ("#e0465a", BG)), ("active", (DANGER_HOVER, BG))],
         }
         for name, states in buttons.items():
             element = name.replace(".", "") + ".bg"
@@ -3695,8 +3779,9 @@ class App:
         page.columnconfigure(0, weight=1)
         page.columnconfigure(1, minsize=340)
         page.rowconfigure(0, weight=1)
-        side = tk.Frame(page, bg=BG)
-        side.grid(row=0, column=1, sticky="nsew", padx=(18, 0))
+        area = ScrollArea(page, BG)
+        area.grid(row=0, column=1, sticky="nsew", padx=(18, 0))
+        side = area.inner
         side.columnconfigure(0, weight=1)
         self._build_run_in(side, mode)
         editors = tk.Frame(side, bg=BG)
@@ -4484,7 +4569,12 @@ class App:
         self._ac_spots_reload(index + offset)
         self.state.save()
 
-    def _build_settings(self, page):
+    def _build_settings(self, outer):
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(0, weight=1)
+        area = ScrollArea(outer, BG)
+        area.grid(row=0, column=0, sticky="nsew")
+        page = area.inner
         page.columnconfigure(0, weight=1, uniform="settings")
         page.columnconfigure(1, weight=1, uniform="settings")
         left = tk.Frame(page, bg=BG)
@@ -4743,8 +4833,9 @@ class App:
         bar.grid(row=3, column=0, columnspan=2, sticky="ew", pady=(12, 0))
         ttk.Button(bar, text="Stop all", style="Danger.TButton", command=self.stop_all).pack(side="right")
 
-        side = tk.Frame(page, bg=BG)
-        side.grid(row=0, column=1, sticky="new", padx=(18, 0))
+        area = ScrollArea(page, BG)
+        area.grid(row=0, column=1, sticky="nsew", padx=(18, 0))
+        side = area.inner
         side.columnconfigure(0, weight=1)
         chosen = card(side, "Selected profile")
         chosen.grid(row=0, column=0, sticky="ew")
@@ -4807,8 +4898,9 @@ class App:
         self.v_preset_status = tk.StringVar(value="")
         ttk.Label(bar, textvariable=self.v_preset_status, style="Muted.TLabel").pack(side="right")
 
-        side = tk.Frame(page, bg=BG)
-        side.grid(row=0, column=1, sticky="new", padx=(18, 0))
+        area = ScrollArea(page, BG)
+        area.grid(row=0, column=1, sticky="nsew", padx=(18, 0))
+        side = area.inner
         side.columnconfigure(0, weight=1)
         chosen = card(side, "Selected preset")
         chosen.grid(row=0, column=0, sticky="ew")
