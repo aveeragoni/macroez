@@ -1102,7 +1102,7 @@ DEFAULT_SETTINGS = {
 DEFAULT_PROFILE = "Default"
 MODES = ("image", "classic", "hybrid", "reaction", "autoclick")
 SIMPLE_HIDDEN = {"hybrid", "reaction", "profiles"}  # what Simple mode hides
-DEFAULT_PREFS = {"simple": False, "asked_simple": False}  # app-wide, shared by every profile
+DEFAULT_PREFS = {"simple": False, "asked_simple": False, "snip_shape": "box"}  # app-wide, shared by every profile
 ANY_APP = "Any app"
 
 
@@ -1170,7 +1170,9 @@ class State:
             return
         prefs = raw.get("app")
         if isinstance(prefs, dict):
-            self.prefs.update({k: bool(v) for k, v in prefs.items() if k in DEFAULT_PREFS})
+            self.prefs.update({k: bool(v) for k, v in prefs.items() if k in DEFAULT_PREFS and k != "snip_shape"})
+            if prefs.get("snip_shape") in SNIP_SHAPES:
+                self.prefs["snip_shape"] = prefs["snip_shape"]
         keys = raw.get("hotkeys")
         if isinstance(keys, dict):
             self.hotkeys.update({k: v for k, v in keys.items() if k in DEFAULT_HOTKEYS and v in HOTKEY_KEYS})
@@ -2244,10 +2246,108 @@ def register_link_handler():
         pass
 
 
+# Shapes a snip can be cut to. Everything outside the shape is saved see-through and ignored when searching.
+SNIP_SHAPES = {"box": "▭ Box", "circle": "◯ Circle", "triangle": "△ Triangle", "diamond": "◇ Diamond",
+               "hexagon": "⬡ Hexagon", "star": "☆ Star", "draw": "✎ Draw your own"}
+MIN_SHAPE_PIXELS = 60  # fewer kept pixels than this can't be told apart from anything else on screen
+
+
+def shape_outline(shape, left, top, right, bottom):
+    """The corners of a shape that fills this box, as (x, y) points. Circles get enough points to look round."""
+    cx, cy, rx, ry = (left + right) / 2, (top + bottom) / 2, (right - left) / 2, (bottom - top) / 2
+
+    def around(count, radius=lambda i: 1.0, start=-math.pi / 2):
+        return [(cx + rx * radius(i) * math.cos(start + 2 * math.pi * i / count),
+                 cy + ry * radius(i) * math.sin(start + 2 * math.pi * i / count)) for i in range(count)]
+
+    if shape == "circle":
+        return around(72)
+    if shape == "triangle":
+        return [(cx, top), (right, bottom), (left, bottom)]
+    if shape == "diamond":
+        return [(cx, top), (right, cy), (cx, bottom), (left, cy)]
+    if shape == "hexagon":
+        return around(6, start=0.0)  # flat top and bottom, points left and right
+    if shape == "star":
+        return around(10, radius=lambda i: 1.0 if i % 2 == 0 else 0.45)
+    return [(left, top), (right, top), (right, bottom), (left, bottom)]
+
+
+def cut_shape(image, points):
+    """Crop the image to the outline's box and make everything outside the outline see-through.
+    Returns (cut image, box), or (None, reason) if too little is left to search for."""
+    xs, ys = [x for x, _ in points], [y for _, y in points]
+    box = (max(0, round(min(xs))), max(0, round(min(ys))),
+           min(image.width, round(max(xs))), min(image.height, round(max(ys))))
+    if box[2] - box[0] < 6 or box[3] - box[1] < 6:
+        return None, "That area was too small, try again."
+    piece = image.crop(box)
+    mask = Image.new("L", piece.size, 0)
+    ImageDraw.Draw(mask).polygon([(x - box[0], y - box[1]) for x, y in points], fill=255)
+    if piece.mode == "RGBA":  # cutting a picture that already has see-through parts keeps them see-through
+        mask = Image.fromarray(np.minimum(np.array(mask), np.array(piece.getchannel("A"))))
+    kept = int((np.array(mask) >= 128).sum())
+    if kept < MIN_SHAPE_PIXELS:
+        return None, "That shape is too thin to search for. Draw around more of it."
+    if kept == piece.width * piece.height:
+        return piece.convert("RGB"), box
+    piece = piece.convert("RGBA")
+    piece.putalpha(mask)
+    return piece, box
+
+
+def shape_bar(parent, current, pick):
+    """A row of shape buttons; pick(shape) runs when one is chosen. Returns the frame and a function to
+    show which one is chosen."""
+    bar = ttk.Frame(parent, style="Bg.TFrame")
+    buttons = {}
+    for number, (shape, label) in enumerate(SNIP_SHAPES.items(), start=1):
+        buttons[shape] = ttk.Button(bar, text=label, command=lambda s=shape: pick(s), takefocus=False)
+        buttons[shape].pack(side="left", padx=(0 if number == 1 else 4, 0))
+
+    def show(chosen):
+        for shape, button in buttons.items():
+            button.configure(style="Accent.TButton" if shape == chosen else "TButton")
+
+    show(current)
+    return bar, show
+
+
+def drag_outline(shape, start, end, square=False):
+    """The outline for a drag from start to end. Shift (square=True) keeps it as wide as it is tall."""
+    (x0, y0), (x1, y1) = start, end
+    if square:
+        side = max(abs(x1 - x0), abs(y1 - y0))
+        x1 = x0 + side * (1 if x1 >= x0 else -1)
+        y1 = y0 + side * (1 if y1 >= y0 else -1)
+    left, right = sorted((x0, x1))
+    top, bottom = sorted((y0, y1))
+    return shape_outline(shape, left, top, right, bottom)
+
+
+def flat(points):
+    """Points as x1, y1, x2, y2, ... for a canvas polygon, which needs at least three points."""
+    points = list(points) + [points[-1]] * max(0, 3 - len(points))
+    return [value for point in points for value in point]
+
+
+def see_through(image, size=8):
+    """A picture with see-through parts drawn over a dark checkerboard, so its shape shows in lists."""
+    if image.mode != "RGBA":
+        return image.convert("RGB")
+    board = Image.new("RGB", image.size, "#1a212b")
+    draw = ImageDraw.Draw(board)
+    for y in range(0, image.height, size):
+        for x in range((y // size) % 2 * size, image.width, size * 2):
+            draw.rectangle((x, y, x + size - 1, y + size - 1), fill="#232c38")
+    board.paste(image, (0, 0), image)
+    return board
+
+
 def thumbnail(item, box):
     try:
         with Image.open(IMAGES / item.file) as image:
-            copy_ = image.convert("RGB")
+            copy_ = see_through(image.convert("RGBA") if image.has_transparency_data else image.convert("RGB"))
     except (OSError, ValueError):
         return None
     copy_.thumbnail(box)
@@ -2269,39 +2369,60 @@ def crop_window(app, target, set_file):
     window.configure(bg=BG, padx=18, pady=16)
     window.resizable(False, False)
     window.transient(app.root)
-    message = tk.StringVar(value="Drag around the part to keep. Leave out the background behind it.")
+    message = tk.StringVar(value="Pick a shape, then drag around the part to keep. Leave out the background.")
     tk.Label(window, textvariable=message, bg=BG, fg=TEXT, font=(app.font, 10)).pack(anchor="w", pady=(0, 10))
-    canvas = tk.Canvas(window, width=shown.width, height=shown.height, highlightthickness=0, cursor="crosshair")
+    drag = {"x": 0, "y": 0, "box": None, "points": None, "shape": app.state.prefs.get("snip_shape", "box")}
+
+    def pick(shape):
+        drag["shape"] = shape
+        app.state.prefs["snip_shape"] = shape
+        show_shape(shape)
+        message.set("Hold the mouse and draw around the part to keep." if shape == "draw" else
+                    "Drag around the part to keep. Hold Shift to keep it even, like a perfect circle.")
+
+    bar, show_shape = shape_bar(window, drag["shape"], pick)
+    bar.pack(anchor="w", pady=(0, 10))
+    canvas = tk.Canvas(window, width=shown.width, height=shown.height, highlightthickness=0, cursor="crosshair",
+                       bg=FIELD)
     canvas.pack()
-    canvas.photo = ImageTk.PhotoImage(shown)
+    canvas.photo = ImageTk.PhotoImage(see_through(shown))
     canvas.create_image(0, 0, image=canvas.photo, anchor="nw")
-    drag = {"x": 0, "y": 0, "box": None, "end": None}
 
     def clamp(event):
         return min(max(event.x, 0), shown.width), min(max(event.y, 0), shown.height)
 
     def press(event):
         drag["x"], drag["y"] = clamp(event)
-        drag["end"] = None
+        drag["points"] = None
         if drag["box"]:
             canvas.delete(drag["box"])
-        drag["box"] = canvas.create_rectangle(drag["x"], drag["y"], drag["x"], drag["y"], outline=GLASS, width=2)
+        drag["box"] = None
+        if drag["shape"] == "draw":
+            drag["points"] = [clamp(event)]
 
     def motion(event):
-        drag["end"] = clamp(event)
-        canvas.coords(drag["box"], drag["x"], drag["y"], *drag["end"])
+        end = clamp(event)
+        if drag["shape"] == "draw":
+            last = drag["points"][-1]
+            if abs(end[0] - last[0]) + abs(end[1] - last[1]) >= 3:
+                drag["points"].append(end)
+        else:
+            drag["points"] = drag_outline(drag["shape"], (drag["x"], drag["y"]), end, bool(event.state & 0x0001))
+        if drag["points"]:
+            if drag["box"]:
+                canvas.coords(drag["box"], *flat(drag["points"]))
+            else:
+                drag["box"] = canvas.create_polygon(*flat(drag["points"]), outline=GLASS, fill="", width=2)
 
     def apply():
-        if drag["end"] is None:
-            message.set("Drag a box first.")
+        if not drag["points"] or len(drag["points"]) < 3:
+            message.set("Drag around the part to keep first.")
             return
-        left, right = sorted((drag["x"], drag["end"][0]))
-        upper, lower = sorted((drag["y"], drag["end"][1]))
-        box = (round(left / zoom), round(upper / zoom), round(right / zoom), round(lower / zoom))
-        if box[2] - box[0] < 6 or box[3] - box[1] < 6:
-            message.set("That's too small, drag a bigger box.")
+        piece, box = cut_shape(image, [(x / zoom, y / zoom) for x, y in drag["points"]])
+        if piece is None:
+            message.set(box)
             return
-        filename = save_image(image.crop(box), target.name)
+        filename = save_image(piece, target.name)
         set_file(target, filename, target.uncropped or target.file)
         app.log(f"Cropped {target.name}. Press {app.hotkey_name('test')} while it's on screen to check the match.")
         window.destroy()
@@ -5209,7 +5330,7 @@ class App:
         if self.active is self.classic:
             self.log("Classic macros don't use images. Use Hybrid mode to mix in image steps.")
             return
-        self._open_overlay("Drag around what to look for. Esc cancels.", self._snip_done)
+        self._open_overlay("Drag around what to look for. Esc cancels.", self._snip_done, shapes=True)
 
     def draw_zone(self):
         self._open_overlay("Drag over the area it must never click, like a toolbar. Esc cancels.", self._zone_done)
@@ -5226,8 +5347,16 @@ class App:
         y = min(max(point[1] - monitor["top"], 0), monitor["height"] - 1)
         return x, y
 
-    def _snip_done(self, image, box, _monitor):
-        self.active.add(image.crop(box), self.active.next_name())
+    def _snip_done(self, image, box, _monitor, outline=None):
+        piece = image.crop(box)
+        if outline:
+            piece, problem = cut_shape(image, outline)
+            if piece is None:
+                self.log(problem)
+                if isinstance(self.active, ActionList):
+                    self.active.pending = None
+                return
+        self.active.add(piece, self.active.next_name())
 
     def _zone_done(self, _image, box, monitor):
         left, top, right, bottom = box
@@ -5248,7 +5377,7 @@ class App:
         count = len(self.state.settings["safe_zones"])
         self.v_zones.set(f"Safe zones: {count}")
 
-    def _open_overlay(self, hint_text, done, point=False):
+    def _open_overlay(self, hint_text, done, point=False, shapes=False):
         if self.snipping:
             return
         if screen_capture_blocked():
@@ -5259,9 +5388,9 @@ class App:
         self.snipping = True
         self.engine.stop()
         self.root.withdraw()
-        self.root.after(220, lambda: self._show_overlay(hint_text, done, point))
+        self.root.after(220, lambda: self._show_overlay(hint_text, done, point, shapes))
 
-    def _show_overlay(self, hint_text, done, point=False):
+    def _show_overlay(self, hint_text, done, point=False, shapes=False):
         with mss.MSS() as sct:
             monitor = pick_monitor(sct, self.state.settings["monitor"])
             shot = sct.grab(monitor)
@@ -5281,25 +5410,67 @@ class App:
             canvas.create_rectangle(left, upper, right, lower, outline=DANGER, width=2, fill=DANGER, stipple="gray25")
         hint = canvas.create_text(monitor["width"] // 2, 40, fill=TEXT, font=(self.font, 15, "bold"), text=hint_text)
         x0, y0, x1, y1 = canvas.bbox(hint)
-        canvas.tag_lower(canvas.create_rectangle(x0 - 18, y0 - 12, x1 + 18, y1 + 12, fill=BG, outline=GLASS), hint)
-        drag = {"x": 0, "y": 0, "box": None}
+        hint_box = canvas.create_rectangle(x0 - 18, y0 - 12, x1 + 18, y1 + 12, fill=BG, outline=GLASS)
+        canvas.tag_lower(hint_box, hint)
+        drag = {"x": 0, "y": 0, "box": None, "points": None,
+                "shape": self.state.prefs.get("snip_shape", "box") if shapes else "box"}
+
+        def show_hint(text):
+            canvas.itemconfigure(hint, text=text)
+            x0, y0, x1, y1 = canvas.bbox(hint)
+            canvas.coords(hint_box, x0 - 18, y0 - 12, x1 + 18, y1 + 12)
+
+        if shapes:
+            def pick(shape):
+                drag["shape"] = shape
+                self.state.prefs["snip_shape"] = shape
+                show_shape(shape)
+                show_hint("Hold the mouse and draw around what to look for. Let go to finish. Esc cancels."
+                          if shape == "draw" else
+                          f"Drag around what to look for. Hold Shift to keep it even. Esc cancels.")
+
+            bar, show_shape = shape_bar(top, drag["shape"], pick)
+            canvas.create_window(monitor["width"] // 2, y1 + 22, window=bar, anchor="n")
+            for number, shape in enumerate(SNIP_SHAPES, start=1):
+                top.bind(str(number), lambda _e, s=shape: pick(s))
+            if drag["shape"] != "box":
+                pick(drag["shape"])
 
         def press(event):
-            drag.update(x=event.x, y=event.y)
+            drag.update(x=event.x, y=event.y, points=None)
             if drag["box"]:
                 canvas.delete(drag["box"])
-            drag["box"] = canvas.create_rectangle(event.x, event.y, event.x, event.y, outline=GLASS, width=2)
+            drag["box"] = None
+            if point:
+                return
+            if drag["shape"] == "draw":
+                drag["points"] = [(event.x, event.y)]
+            else:
+                drag["points"] = drag_outline(drag["shape"], (event.x, event.y), (event.x, event.y))
+            drag["box"] = canvas.create_polygon(*flat(drag["points"]), outline=GLASS, fill="", width=2)
 
         def motion(event):
-            if drag["box"] and not point:
-                canvas.coords(drag["box"], drag["x"], drag["y"], event.x, event.y)
+            if not drag["box"] or point:
+                return
+            if drag["shape"] == "draw":
+                last = drag["points"][-1]
+                if abs(event.x - last[0]) + abs(event.y - last[1]) < 3:
+                    return
+                drag["points"].append((event.x, event.y))
+            else:
+                drag["points"] = drag_outline(drag["shape"], (drag["x"], drag["y"]), (event.x, event.y),
+                                              bool(event.state & 0x0001))
+            canvas.coords(drag["box"], *flat(drag["points"]))
 
-        def finish(box=None):
+        def finish(box=None, outline=None):
             top.destroy()
             self.root.deiconify()
             self.snipping = False
             if box is not None:
-                done(image, box, monitor)
+                if outline:
+                    done(image, box, monitor, outline=outline)
+                else:
+                    done(image, box, monitor)
             elif isinstance(self.active, ActionList):
                 self.active.pending = None
 
@@ -5307,13 +5478,22 @@ class App:
             if point:
                 finish((event.x, event.y, event.x + 1, event.y + 1))
                 return
-            left, right = sorted((drag["x"], event.x))
-            upper, lower = sorted((drag["y"], event.y))
+            if drag["shape"] == "draw":
+                points = drag["points"] or []
+                if len(points) < 3:
+                    self.log("Hold the mouse down and draw all the way around it, then let go.")
+                    finish()
+                    return
+            else:
+                points = drag_outline(drag["shape"], (drag["x"], drag["y"]), (event.x, event.y),
+                                      bool(event.state & 0x0001))
+            xs, ys = [x for x, _ in points], [y for _, y in points]
+            left, upper, right, lower = math.floor(min(xs)), math.floor(min(ys)), math.ceil(max(xs)), math.ceil(max(ys))
             if right - left < 6 or lower - upper < 6:
                 self.log("That area was too small, try again.")
                 finish()
                 return
-            finish((left, upper, right, lower))
+            finish((left, upper, right, lower), outline=None if drag["shape"] == "box" else points)
 
         canvas.bind("<ButtonPress-1>", press)
         canvas.bind("<B1-Motion>", motion)
